@@ -87,7 +87,24 @@ class PathDataset(Dataset):
 
     def __len__(self): 
         return self.len
+def fmeasure(output, target):
+    _, pred = output.topk(1, 1, True, True)
+    pred = pred.view(-1,1)
+    target = target.view(-1,1)
 
+    #overlap = ((pred== 1) + (target == 1)).gt(1)
+    #overlap = overlap.view(-1,1)
+    TP = len(np.where((pred==1)&(target==1)==True)[0]) # True positive
+    FP = len(np.where((pred==1)&(target==0)==True)[0]) # Condition positive = TP + FN
+    TN = len(np.where((pred==0)&(target==0)==True)[0])
+    FN = len(np.where((pred==0)&(target==1)==True)[0])
+
+
+    #overlap_len = overlap.data.long().sum()
+    pred_len = pred.data.long().sum()
+    gt_len   =  target.data.long().sum()
+
+    return TP,FP,TN,FN,pred_len, gt_len
 if __name__ == '__main__':
 
     ########## ENVIRONMENT SETUP ############
@@ -153,9 +170,20 @@ if __name__ == '__main__':
         valid_loader = DataLoader(\
             dataset=PathDataset(valid_data, valid_label, test_mode=False), 
                 batch_size=batch_size, shuffle=True)
+                
+
+        best=0 #for metric
         
         # Train the model
         for epoch in range(num_epochs):
+            pred_sum = 0#model output
+            gt_sum = 0#label
+            tp_sum=0
+            fp_sum=0
+            fn_sum=0
+            tn_sum=0
+            acc=0
+            total=0
             for i, (images, labels) in enumerate(train_loader):
                 model.train()
                 
@@ -170,6 +198,7 @@ if __name__ == '__main__':
                 optimizer.zero_grad()
                 loss.backward()
                 optimizer.step()
+                
             
             for j, (vimages, vlabels) in enumerate(valid_loader):
                 model.eval()
@@ -179,17 +208,39 @@ if __name__ == '__main__':
                 
                 voutputs = model(vimages)
                 crossentropy = criterion(voutputs, vlabels)
-                
+                TP,FP,TN,FN,pred_len, gt_len=fmeasure(voutputs.cpu(),vlabels.cpu())
+
                 voutputs = voutputs.cpu().detach().numpy()
                 vlabels = vlabels.cpu().detach().numpy()
                 
-                acc = accuracy_score(voutputs, vlabels)
-                f1 = f1_score(voutputs, vlabels)
-                
+                tp_sum += TP
+                fp_sum += FP
+                fn_sum += FN
+                tn_sum += TN
+                pred_sum += pred_len
+                gt_sum += gt_len
+                acc=acc+TP+TN
+                total+=len(voutputs)
             
+            
+            #metric 통합
+            f1=f1 = (2*precision*sens / (precision + sens)) * 100
+            accuracy=acc/total
+            sens=tp_sum/(tp_sum+fn_sum)
+            spec=tn_sum/(tn_sum+fp_sum)
+            prec=tp_sum/(tp_sum+fp_sum)
+            npv=tn_sum/(tn_sum+fn_sum)
+            total_metric=(f1+accuracy+sens+spec+prec+npv)/6
+            if best<total_metric:
+                best=total_metric
+                nsml.report(summary=True, step=epoch, epoch_total=num_epochs, loss=loss.item())#, acc=train_acc)
+                nsml.save('best')
+
+                
+
             
             nsml.report(summary=True, step=epoch, epoch_total=num_epochs, loss=loss.item())#, acc=train_acc)
             nsml.save(epoch)
-            
+
             
         
