@@ -1,3 +1,11 @@
+#!/usr/bin/env python3
+# -*- coding: utf-8 -*-
+"""
+Created on Tue Sep 22 00:53:01 2020
+
+@author: hihyun
+"""
+
 import os
 import argparse
 import sys
@@ -12,7 +20,6 @@ import torch.nn as nn
 from torch.utils.data import Dataset, DataLoader, ConcatDataset
 from sklearn.metrics import *
 import torchvision as tv
-from efficientnet_pytorch import EfficientNet
 
 ######################## DONOTCHANGE ###########################
 def bind_model(model):
@@ -27,15 +34,11 @@ def bind_model(model):
         print('model loaded!')
 
     def infer(image_path):
+
         result = []
-        with torch.no_grad():   
-            test_transform = tv.transforms.Compose([
-                    tv.transforms.ToPILImage(mode = 'RGB'),
-                    tv.transforms.Resize(512),
-                    tv.transforms.CenterCrop(64)
-                    ])
+        with torch.no_grad():             
             batch_loader = DataLoader(dataset=PathDataset(image_path, labels=None),
-                                        batch_size=batch_size,shuffle=False, transform = test_transform)
+                                        batch_size=1,shuffle=False)
             # Train the model 
             for i, images in enumerate(batch_loader):
                 y_hat = model(images.to(device)).cpu().numpy()
@@ -91,8 +94,6 @@ class PathDataset(Dataset):
         
         if self.mode:
 
-            im = self.transform(im)
-            im = np.array(im)
             im = im.reshape(3,im.shape[0],im.shape[1])
             return torch.tensor(im,dtype=torch.float32)
         else:
@@ -156,8 +157,7 @@ if __name__ == '__main__':
     device = torch.device('cuda:0' if torch.cuda.is_available() else 'cpu')
 
     # model setting ## 반드시 이 위치에서 로드해야함
-    #model = arch.CNN().to(device)
-    model=EfficientNet.from_pretrained('efficientnet-b3',num_classes=2).cuda()
+    model = arch.CNN().to(device)
 
     # Loss and optimizer
     criterion = nn.CrossEntropyLoss()
@@ -172,6 +172,9 @@ if __name__ == '__main__':
 
     if config.mode == 'train': ### training mode 일때는 여기만 접근
         print('Training Start...')
+        nsml.load(checkpoint='36',session='KHD009/Breast_Pathology/34')
+        nsml.save('saved')
+        exit()
 
         ############ DONOTCHANGE: Path loader ###############
         root_path = os.path.join(DATASET_PATH,'train')
@@ -299,8 +302,6 @@ if __name__ == '__main__':
             
             if best<total_metric:
                 best=total_metric
-                print('{0}/{1}'.format(best,total_metric))
-                print('acc : {} sens : {} spec :{} prec :{} npv :{}  f1 :{}'.format(accuracy,sens,spec,prec,npv,f1))
                 nsml.report(summary=True, step=epoch, epoch_total=num_epochs, loss=loss.item())#, acc=train_acc)
                 nsml.save('best')
 
