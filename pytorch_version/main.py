@@ -27,9 +27,14 @@ def bind_model(model):
 
     def infer(image_path):
         result = []
-        with torch.no_grad():             
+        with torch.no_grad():   
+            test_transform = tv.transforms.Compose([
+                    tv.transforms.ToPILImage(mode = 'RGB'),
+                    tv.transforms.Resize(512),
+                    tv.transforms.CenterCrop(64)
+                    ])
             batch_loader = DataLoader(dataset=PathDataset(image_path, labels=None),
-                                        batch_size=batch_size,shuffle=False)
+                                        batch_size=batch_size,shuffle=False, transform = test_transform)
             # Train the model 
             for i, images in enumerate(batch_loader):
                 y_hat = model(images.to(device)).cpu().numpy()
@@ -84,6 +89,7 @@ class PathDataset(Dataset):
         
         
         if self.mode:
+
             im = self.transform(im)
             im = np.array(im)
             im = im.reshape(3,im.shape[0],im.shape[1])
