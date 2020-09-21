@@ -10,6 +10,7 @@ from nsml.constants import DATASET_PATH, GPU_NUM
 import torch 
 import torch.nn as nn
 from torch.utils.data import Dataset, DataLoader 
+from sklearn.metrics import *
 
 ######################## DONOTCHANGE ###########################
 def bind_model(model):
@@ -103,6 +104,7 @@ if __name__ == '__main__':
     args.add_argument('--epoch', type=int, default=1)
     args.add_argument('--batch_size', type=int, default=64) 
     args.add_argument('--learning_rate', type=int, default=0.0001)
+    args.add_argument('--train_ratio', type=int, default=0.8)
 
     config = args.parse_args()
 
@@ -135,14 +137,28 @@ if __name__ == '__main__':
         image_keys, image_path = path_loader(root_path)
         labels = label_loader(root_path, image_keys)
         ##############################################
- 
-        batch_loader = DataLoader(\
-            dataset=PathDataset(image_path, labels, test_mode=False), 
+        total_len = len(image_path)
+        train_ratio = 0.8
+        train_image = image_path[:int(total_len*train_ratio)]
+        train_label = labels[:int(total_len*train_ratio)]
+        valid_image = image_path[int(total_len*train_ratio):]
+        valid_label = labels[int(total_len*train_ratio):]
+        
+        
+        train_data = PathDataset(train_image, train_label, test_mode=False)
+        valid_data = PathDataset(valid_image, valid_label, test_mode=False)
+        train_loader = DataLoader(\
+            dataset=PathDataset(train_data, train_label, test_mode=False), 
+                batch_size=batch_size, shuffle=True)
+        valid_loader = DataLoader(\
+            dataset=PathDataset(valid_data, valid_label, test_mode=False), 
                 batch_size=batch_size, shuffle=True)
         
         # Train the model
         for epoch in range(num_epochs):
-            for i, (images, labels) in enumerate(batch_loader):
+            for i, (images, labels) in enumerate(train_loader):
+                model.train()
+                
                 images = images.to(device)
                 labels = labels.to(device)
                 
@@ -154,6 +170,26 @@ if __name__ == '__main__':
                 optimizer.zero_grad()
                 loss.backward()
                 optimizer.step()
+            
+            for j, (vimages, vlabels) in enumerate(valid_loader):
+                model.eval()
                 
+                vimages = vimages.to(device)
+                vlabels = vlabels.to(device)
+                
+                voutputs = model(vimages)
+                crossentropy = criterion(voutputs, vlabels)
+                
+                voutputs = voutputs.cpu().detach().numpy()
+                vlabels = vlabels.cpu().detach().numpy()
+                
+                acc = accuracy_score(voutputs, vlabels)
+                f1 = f1_score(voutputs, vlabels)
+                
+            
+            
             nsml.report(summary=True, step=epoch, epoch_total=num_epochs, loss=loss.item())#, acc=train_acc)
             nsml.save(epoch)
+            
+            
+        
