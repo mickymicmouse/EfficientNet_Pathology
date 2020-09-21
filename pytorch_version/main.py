@@ -141,12 +141,13 @@ if __name__ == '__main__':
     ######################################################################
 
     # hyperparameters
-    args.add_argument('--epoch', type=int, default=100)
+    args.add_argument('--epoch', type=int, default=2000)
     args.add_argument('--batch_size', type=int, default=64) 
     args.add_argument('--learning_rate', type=int, default=0.0001)
     args.add_argument('--train_ratio', type=int, default=0.8)
 
     config = args.parse_args()
+    
 
     # training parameters
     num_epochs = config.epoch
@@ -171,6 +172,7 @@ if __name__ == '__main__':
     #######################################
 
     if config.mode == 'train': ### training mode 일때는 여기만 접근
+        print(torch.version.__version__)
         print('Training Start...')
 
         ############ DONOTCHANGE: Path loader ###############
@@ -229,7 +231,7 @@ if __name__ == '__main__':
         
         
         valid_data = PathDataset(valid_image, valid_label, test_mode=False,transform = test_transform)
-        train_loader = DataLoader(dataset=ConcatDataset(train_data1,train_data2,train_data3,train_data4), 
+        train_loader = DataLoader(dataset=ConcatDataset([train_data1,train_data2,train_data3,train_data4]), 
                 batch_size=batch_size, shuffle=True, drop_last = True)
         valid_loader = DataLoader(dataset=valid_data, 
                 batch_size=batch_size, shuffle=True, drop_last = True)
