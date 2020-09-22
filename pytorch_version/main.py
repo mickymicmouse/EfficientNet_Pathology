@@ -182,6 +182,7 @@ if __name__ == '__main__':
         train_label = labels[:int(total_len*train_ratio)]
         valid_image = image_path[int(total_len*train_ratio):]
         valid_label = labels[int(total_len*train_ratio):]
+
         
         train_transform1 = tv.transforms.Compose([
                 tv.transforms.ToPILImage(mode = 'RGB'),
@@ -227,7 +228,7 @@ if __name__ == '__main__':
         
         
         valid_data = PathDataset(valid_image, valid_label, test_mode=False,transform = test_transform)
-        train_loader = DataLoader(dataset=ConcatDataset(train_data1,train_data2,train_data3,train_data4), 
+        train_loader = DataLoader(dataset=ConcatDataset([train_data1,train_data2,train_data3,train_data4]), 
                 batch_size=batch_size, shuffle=True, drop_last = True)
         valid_loader = DataLoader(dataset=valid_data, 
                 batch_size=batch_size, shuffle=True, drop_last = True)
