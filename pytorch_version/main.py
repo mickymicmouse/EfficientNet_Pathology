@@ -296,7 +296,7 @@ if __name__ == '__main__':
             spec=tn_sum/(tn_sum+fp_sum)
             prec=tp_sum/(tp_sum+fp_sum)
             npv=tn_sum/(tn_sum+fn_sum)
-            f1= (2*prec*sens / (prec + sens)) * 100
+            f1= (2*prec*sens / (prec + sens))
             total_metric=(f1+accuracy+sens+spec+prec+npv)/6
             
             if best<total_metric:
