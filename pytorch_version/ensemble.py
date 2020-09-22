@@ -1,3 +1,10 @@
+# -*- coding: utf-8 -*-
+"""
+Created on Tue Sep 22 18:48:39 2020
+
+@author: seungjun
+"""
+
 import os
 import argparse
 import sys
@@ -28,6 +35,9 @@ def bind_model(model):
 
     def infer(image_path):
         result = []
+        result_b=[]
+        result_r=[]
+        
         with torch.no_grad():   
             test_transform = tv.transforms.Compose([
                     tv.transforms.ToPILImage(mode = 'RGB'),
@@ -43,7 +53,17 @@ def bind_model(model):
             # Train the model 
             for i, images in enumerate(batch_loader):
                 y_hat = model(images.to(device)).cpu().numpy()
-                result.extend(np.argmax(y_hat, axis=1))
+                y_hat_b = model_b(images.to(device)).cpu().numpy()
+                y_hat_r = model_r(images.to(device)).cpu().numpy()
+                y= np.argmax(y_hat, axis = 1)
+                y_b=np.argmax(y_hat_b, axis = 1)
+                y_r=np.argmax(y_hat_r, axis = 1)
+                total_result = np.array([y,y_b,y_r])
+                before_result = list(np.count_nonzero(total_result, axis=0))
+                after_result = [1 if x>=2 else 0 for x in before_result]
+                result.extend(after_result)
+
+                
 
         print('predicted')
         return np.array(result)
@@ -95,7 +115,7 @@ class PathDataset(Dataset):
                 ### REQUIRED: PREPROCESSING ###
 
         if self.mode:
-
+            
             im = self.transform(im)
             #im = np.array(im)
             #im = im.reshape(3,im.shape[0],im.shape[1])
@@ -111,11 +131,84 @@ class PathDataset(Dataset):
     def __len__(self): 
         return self.len
 
+class PathDataset_b(Dataset): 
+    def __init__(self,image_path, labels=None, test_mode= True, transform = None): 
+        self.len = len(image_path)
+        self.image_path = image_path
+        self.labels = labels 
+        self.mode = test_mode
+        self.transform = transform
+
+    def __getitem__(self, index): 
+        im = cv2.imread(self.image_path[index])
+        # bgr
+        b,g,r = cv2.split(im)
+        zeros = np.zeros((im.shape[0],im.shape[1]), dtype=np.uint8)
+        im = cv2.merge((b,zeros,zeros))
+        im = cv2.cvtColor(im, cv2.COLOR_BGR2RGB)
+        # rgb
+        # numpy
+        # transforms = need PIL image
+                ### REQUIRED: PREPROCESSING ###
+        
+        if self.mode:
+            
+            im = self.transform(im)
+            #im = np.array(im)
+            #im = im.reshape(3,im.shape[0],im.shape[1])
+            return im
+        else:
+            im = self.transform(im)
+            #im = np.array(im)
+            #im = im.reshape(3,im.shape[0],im.shape[1])
+            
+            return im,\
+                 torch.tensor(self.labels[index] ,dtype=torch.long)
+
+    def __len__(self): 
+        return self.len
+
+class PathDataset_r(Dataset): 
+    def __init__(self,image_path, labels=None, test_mode= True, transform = None): 
+        self.len = len(image_path)
+        self.image_path = image_path
+        self.labels = labels 
+        self.mode = test_mode
+        self.transform = transform
+
+    def __getitem__(self, index): 
+        im = cv2.imread(self.image_path[index])
+        # bgr
+        b,g,r = cv2.split(im)
+        zeros = np.zeros((im.shape[0],im.shape[1]), dtype=np.uint8)
+        im = cv2.merge((zeros,zeros,r))
+        im = cv2.cvtColor(im, cv2.COLOR_BGR2RGB)
+        # rgb
+        # numpy
+        # transforms = need PIL image
+                ### REQUIRED: PREPROCESSING ###
+        
+        if self.mode:
+            
+            im = self.transform(im)
+            #im = np.array(im)
+            #im = im.reshape(3,im.shape[0],im.shape[1])
+            return im
+        else:
+            im = self.transform(im)
+            #im = np.array(im)
+            #im = im.reshape(3,im.shape[0],im.shape[1])
+            
+            return im,\
+                 torch.tensor(self.labels[index] ,dtype=torch.long)
+
+    def __len__(self): 
+        return self.len
     
     
 def fmeasure(output, target):
-    _, pred = output.topk(1, 1, True, True)
-    pred = pred.view(-1,1)
+    # _, pred = output.topk(1, 1, True, True)
+    pred = output.view(-1,1)
     target = target.view(-1,1)
 
     #overlap = ((pred== 1) + (target == 1)).gt(1)
@@ -163,14 +256,18 @@ if __name__ == '__main__':
 
     # model setting ## 반드시 이 위치에서 로드해야함
     #model = arch.CNN().to(device)
+    model_b=EfficientNet.from_pretrained('efficientnet-b3',num_classes=2).cuda()
     model=EfficientNet.from_pretrained('efficientnet-b3',num_classes=2).cuda()
-
+    model_r=EfficientNet.from_pretrained('efficientnet-b3',num_classes=2).cuda()
     # Loss and optimizer
     criterion = nn.CrossEntropyLoss()
+    optimizer_b = torch.optim.Adam(model_b.parameters(), lr=learning_rate)
+    optimizer_r = torch.optim.Adam(model_r.parameters(), lr=learning_rate)
     optimizer = torch.optim.Adam(model.parameters(), lr=learning_rate)
-
     ############ DONOTCHANGE ###############
     bind_model(model)
+    bind_model(model_r)
+    bind_model(model_b)
     if config.pause: ## test mode 일때는 여기만 접근
         print('Inferring Start...')
         nsml.paused(scope=locals())
@@ -232,9 +329,7 @@ if __name__ == '__main__':
         #img1=image_path[total_index]
         #img2=image_path[true_valid_index]
         #img3=np.concatenate([img1,img2])
-        
-        
-        
+        #labels=np.array(labels)
         
         
         ###
@@ -246,7 +341,7 @@ if __name__ == '__main__':
         valid_image = image_path[int(total_len*train_ratio):]
         valid_label = labels[int(total_len*train_ratio):]
         """
-        labels=np.array(labels)
+        
         train_image = image_path[train_index]
         train_label = labels[train_index]
         valid_image = image_path[valid_index]
@@ -315,14 +410,37 @@ if __name__ == '__main__':
         train_data3 = PathDataset(train_image, train_label, test_mode=False,transform = train_transform3)
         train_data4 = PathDataset(train_image, train_label, test_mode=False,transform = train_transform4)
         
+        train_data1_b = PathDataset_b(train_image, train_label, test_mode=False,transform = train_transform1)
+        train_data2_b = PathDataset_b(train_image, train_label, test_mode=False,transform = train_transform2)
+        train_data3_b = PathDataset_b(train_image, train_label, test_mode=False,transform = train_transform3)
+        train_data4_b = PathDataset_b(train_image, train_label, test_mode=False,transform = train_transform4)
         
-        
+        train_data1_r = PathDataset_r(train_image, train_label, test_mode=False,transform = train_transform1)
+        train_data2_r = PathDataset_r(train_image, train_label, test_mode=False,transform = train_transform2)
+        train_data3_r = PathDataset_r(train_image, train_label, test_mode=False,transform = train_transform3)
+        train_data4_r = PathDataset_r(train_image, train_label, test_mode=False,transform = train_transform4)
+
         
         valid_data = PathDataset(valid_image, valid_label, test_mode=False,transform = test_transform)
+        valid_data_b = PathDataset_b(valid_image, valid_label, test_mode=False,transform = test_transform)
+        valid_data_r = PathDataset_r(valid_image, valid_label, test_mode=False,transform = test_transform)
+        
+        
         train_loader = DataLoader(dataset=ConcatDataset([train_data1,train_data2,train_data3,train_data4]), 
                 batch_size=batch_size, shuffle=True, drop_last = True)
-        valid_loader = DataLoader(dataset=valid_data, 
+        train_loader_b = DataLoader(dataset=ConcatDataset([train_data1_b,train_data2_b,train_data3_b,train_data4_b]), 
                 batch_size=batch_size, shuffle=True, drop_last = True)
+        train_loader_r = DataLoader(dataset=ConcatDataset([train_data1_r,train_data2_r,train_data3_r,train_data4_r]), 
+                batch_size=batch_size, shuffle=True, drop_last = True)
+     
+        
+        valid_loader = DataLoader(dataset=valid_data, 
+                batch_size=batch_size, shuffle=False, drop_last = True)
+        valid_loader_b = DataLoader(dataset=valid_data_b, 
+                batch_size=batch_size, shuffle=False, drop_last = True)
+        valid_loader_r = DataLoader(dataset=valid_data_r, 
+                batch_size=batch_size, shuffle=False, drop_last = True)
+        
                 
         print('train number is : '+str(len(train_data1)))
         print('valid number is : '+str(len(valid_data)))
@@ -338,6 +456,12 @@ if __name__ == '__main__':
             tn_sum=0.00001
             acc=0
             total=0
+            answer=[]
+            y=[]
+            y_b=[]
+            y_r=[]
+            
+            
             for i, (images, labels) in enumerate(train_loader):
                 model.train()
                 
@@ -346,35 +470,148 @@ if __name__ == '__main__':
                 
                 # Forward pass
                 outputs = model(images)
+
                 loss = criterion(outputs, labels)
+
                 
                 # Backward and optimize
                 optimizer.zero_grad()
-                loss.backward()
-                optimizer.step()
+
                 
-            
+                loss.backward()
+
+                
+                optimizer.step()
+
+                
+            for i, (images, labels) in enumerate(train_loader_r):
+
+
+                model_r.train()
+                
+                images = images.to(device)
+                labels = labels.to(device)
+                
+                # Forward pass
+
+                outputs_r = model_r(images)
+
+                loss_r = criterion(outputs_r, labels)
+                
+                # Backward and optimize
+
+                optimizer_r.zero_grad()
+                
+
+                loss_r.backward()
+                
+
+                optimizer_r.step()
+    
+            for i, (images, labels) in enumerate(train_loader_b):
+
+                model_b.train()
+
+                
+                images = images.to(device)
+                labels = labels.to(device)
+                
+                # Forward pass
+
+                outputs_b = model_b(images)
+
+                loss_b = criterion(outputs_b, labels)
+
+                
+                # Backward and optimize
+
+                optimizer_b.zero_grad()
+
+                loss_b.backward()
+
+                optimizer_b.step()
+
+                
+
             for j, (vimages, vlabels) in enumerate(valid_loader):
                 model.eval()
+
                 
                 vimages = vimages.to(device)
                 vlabels = vlabels.to(device)
                 
                 voutputs = model(vimages)
-                crossentropy = criterion(voutputs, vlabels)
-                TP,FP,TN,FN,pred_len, gt_len=fmeasure(voutputs.cpu(),vlabels.cpu())
+
+                
+                #crossentropy = criterion(voutputs, vlabels)
+                
+                
+                
 
                 voutputs = voutputs.cpu().detach().numpy()
-                vlabels = vlabels.cpu().detach().numpy()
+                answer.extend(vlabels.cpu().tolist())
                 
-                tp_sum += TP
-                fp_sum += FP
-                fn_sum += FN
-                tn_sum += TN
-                pred_sum += pred_len
-                gt_sum += gt_len
-                acc=acc+TP+TN
-                total+=len(voutputs)
+
+                y.extend(np.argmax(voutputs, axis = 1).tolist())
+
+                
+            for j, (vimages, vlabels) in enumerate(valid_loader_b):
+
+                model_b.eval()
+                
+                vimages = vimages.to(device)
+                vlabels = vlabels.to(device)
+                
+
+                voutputs_b = model_b(vimages)
+
+                
+                #crossentropy = criterion(voutputs, vlabels)
+                
+                
+                
+
+                voutputs_b = voutputs_b.cpu().detach().numpy()
+                
+
+                y_b.extend(np.argmax(voutputs_b, axis = 1).tolist())
+
+                
+            for j, (vimages, vlabels) in enumerate(valid_loader_r):
+
+                model_r.eval()
+
+                
+                vimages = vimages.to(device)
+                vlabels = vlabels.to(device)
+                
+                voutputs_r = model_r(vimages)
+                
+                #crossentropy = criterion(voutputs, vlabels)
+                
+                
+                
+                voutputs_r = voutputs_r.cpu().detach().numpy()
+
+                y_r.extend(np.argmax(voutputs_r, axis = 1).tolist())
+                                
+                
+                
+            total_result = np.array([y,y_b,y_r])
+            before_result = list(np.count_nonzero(total_result, axis=0))
+            after_result = [1 if x>=2 else 0 for x in before_result]
+            
+            
+            TP,FP,TN,FN,pred_len, gt_len=fmeasure(torch.tensor(after_result),torch.tensor(answer))
+            
+            tp_sum += TP
+            fp_sum += FP
+            fn_sum += FN
+            tn_sum += TN
+            pred_sum += pred_len
+            gt_sum += gt_len
+            acc=acc+TP+TN
+            total+=len(voutputs)
             
             
             #metric 통합
