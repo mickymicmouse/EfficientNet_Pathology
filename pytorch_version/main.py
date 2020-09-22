@@ -32,10 +32,14 @@ def bind_model(model):
             test_transform = tv.transforms.Compose([
                     tv.transforms.ToPILImage(mode = 'RGB'),
                     tv.transforms.Resize(512),
-                    tv.transforms.CenterCrop(64)
+                    tv.transforms.CenterCrop(256),
+                    tv.transforms.ToTensor(),
+                    tv.transforms.Normalize(mean=[0.485, 0.456, 0.406],
+                                         std=[0.229, 0.224, 0.225])
                     ])
-            batch_loader = DataLoader(dataset=PathDataset(image_path, labels=None),
-                                        batch_size=batch_size,shuffle=False, transform = test_transform)
+            batch_dataset = PathDataset(image_path, label=None, test_mode= True, transform = test_transform)
+            batch_loader = DataLoader(dataset=batch_dataset,
+                                        batch_size=batch_size,shuffle=False)
             # Train the model 
             for i, images in enumerate(batch_loader):
                 y_hat = model(images.to(device)).cpu().numpy()
@@ -83,24 +87,24 @@ class PathDataset(Dataset):
 
     def __getitem__(self, index): 
         im = cv2.imread(self.image_path[index])
+        im = cv2.cvtColor(im, cv2.COLOR_BGR2RGB)
+        
         # numpy
         # transforms = need PIL image
                 ### REQUIRED: PREPROCESSING ###
 
-        
-        
         if self.mode:
 
             im = self.transform(im)
-            im = np.array(im)
-            im = im.reshape(3,im.shape[0],im.shape[1])
-            return torch.tensor(im,dtype=torch.float32)
+            #im = np.array(im)
+            #im = im.reshape(3,im.shape[0],im.shape[1])
+            return im
         else:
             im = self.transform(im)
-            im = np.array(im)
-            im = im.reshape(3,im.shape[0],im.shape[1])
+            #im = np.array(im)
+            #im = im.reshape(3,im.shape[0],im.shape[1])
             
-            return torch.tensor(im,dtype=torch.float32),\
+            return im,\
                  torch.tensor(self.labels[index] ,dtype=torch.long)
 
     def __len__(self): 
@@ -180,19 +184,86 @@ if __name__ == '__main__':
         image_keys, image_path = path_loader(root_path)
         labels = label_loader(root_path, image_keys)
         ##############################################
+        
+        
+        ##practice##
+        #ky = np.array([0,1,2,3,4,5])
+        #tt = label_loader('C:\\STbigbase\\pytorch_version',ky)
+        #np.count_nonzero(tt)
+        count=0
+        total_index=[x for x in range(len(labels))]
+        true_index=[]
+        false_index=[]
+        
+        for i in range(len(labels)):
+            if labels[i]==1:
+                true_index.append(labels.index(labels[i],i))
+            else:
+                false_index.append(labels.index(labels[i],i))
+
+        true_valid_index = true_index[:500]
+        false_valid_index = false_index[:500]
+        
+        
+        
+        true_train_index = list(set(true_index)-set(true_valid_index))
+        false_train_index = list(set(false_index)-set(false_valid_index))
+        
+        short_ratio = int(len(true_train_index)//len(false_train_index))
+        short_add_num = int(len(true_train_index)%len(false_train_index))
+        
+        false_train_idx = []
+        for i in range(short_ratio):
+            false_train_idx.extend(false_train_index)
+        
+        false_train_idx.extend(false_train_index[:short_add_num])
+        
+        train_index = []
+        train_index.extend(true_train_index)
+        train_index.extend(false_train_idx)
+        valid_index = list(set(true_valid_index) | set(false_valid_index))
+        
+        #valid data = 1000
+        #train_data = 10200
+        
+        
+        #image_path = np.array(['str1','str2','str3','str4','str5','str6'])
+        #img1=image_path[total_index]
+        #img2=image_path[true_valid_index]
+        #img3=np.concatenate([img1,img2])
+        #labels=np.array(labels)
+        
+        
+        ###
+        """
         total_len = len(image_path)
         train_ratio = 0.8
         train_image = image_path[:int(total_len*train_ratio)]
         train_label = labels[:int(total_len*train_ratio)]
         valid_image = image_path[int(total_len*train_ratio):]
         valid_label = labels[int(total_len*train_ratio):]
-
+        """
+        
+        train_image = image_path[train_index]
+        train_label = labels[train_index]
+        valid_image = image_path[valid_index]
+        valid_label = labels[valid_index]
+        
+        print('number of train image is : '+str(len(train_image)))
+        print('number of valid image is : '+str(len(valid_image)))
+        print('number of train true is : '+str(len(true_train_index)))
+        print('number of train false is : '+str(len(false_train_idx)))        
+        
+        
         
         train_transform1 = tv.transforms.Compose([
                 tv.transforms.ToPILImage(mode = 'RGB'),
                 tv.transforms.Resize(512),
                 tv.transforms.RandomAffine(0.1),
-                tv.transforms.RandomCrop(64),
+                tv.transforms.RandomCrop(256),
+                tv.transforms.ToTensor(),
+                tv.transforms.Normalize(mean=[0.485, 0.456, 0.406],
+                                     std=[0.229, 0.224, 0.225])
 
                 ])
     
@@ -200,35 +271,48 @@ if __name__ == '__main__':
         train_transform2 = tv.transforms.Compose([
                 tv.transforms.ToPILImage(mode = 'RGB'),
                 tv.transforms.Resize(512),
-                tv.transforms.RandomCrop(64),
+                tv.transforms.RandomCrop(256),
                 tv.transforms.RandomHorizontalFlip(p=0.5),
-
+                tv.transforms.ToTensor(),
+                tv.transforms.Normalize(mean=[0.485, 0.456, 0.406],
+                                     std=[0.229, 0.224, 0.225])
                 ])
         #수평 플립
         train_transform3 = tv.transforms.Compose([
                 tv.transforms.ToPILImage(mode = 'RGB'),
                 tv.transforms.Resize(512),
-                tv.transforms.RandomCrop(64),
-                tv.transforms.RandomVerticalFlip(p=0.5)
+                tv.transforms.RandomCrop(256),
+                tv.transforms.RandomVerticalFlip(p=0.5),
+                tv.transforms.ToTensor(),
+                tv.transforms.Normalize(mean=[0.485, 0.456, 0.406],
+                                     std=[0.229, 0.224, 0.225])
                 ])
         #수직 플립
         train_transform4 = tv.transforms.Compose([
                 tv.transforms.ToPILImage(mode = 'RGB'),
                 tv.transforms.Resize(512),
-                tv.transforms.RandomCrop(64),
+                tv.transforms.RandomCrop(256),
+                tv.transforms.ToTensor(),
+                tv.transforms.Normalize(mean=[0.485, 0.456, 0.406],
+                                     std=[0.229, 0.224, 0.225])
                 ])
         # original
         
         test_transform = tv.transforms.Compose([
                 tv.transforms.ToPILImage(mode = 'RGB'),
                 tv.transforms.Resize(512),
-                tv.transforms.CenterCrop(64)
+                tv.transforms.CenterCrop(256),
+                tv.transforms.ToTensor(),
+                tv.transforms.Normalize(mean=[0.485, 0.456, 0.406],
+                                     std=[0.229, 0.224, 0.225])
                 ])
         
         train_data1 = PathDataset(train_image, train_label, test_mode=False,transform = train_transform1)
         train_data2 = PathDataset(train_image, train_label, test_mode=False,transform = train_transform2)
         train_data3 = PathDataset(train_image, train_label, test_mode=False,transform = train_transform3)
         train_data4 = PathDataset(train_image, train_label, test_mode=False,transform = train_transform4)
+        
+        
         
         
         valid_data = PathDataset(valid_image, valid_label, test_mode=False,transform = test_transform)
