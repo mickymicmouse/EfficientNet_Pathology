@@ -1,3 +1,11 @@
+#!/usr/bin/env python3
+# -*- coding: utf-8 -*-
+"""
+Created on Tue Sep 22 00:53:01 2020
+
+@author: hihyun
+"""
+
 import os
 import argparse
 import sys
@@ -12,7 +20,6 @@ import torch.nn as nn
 from torch.utils.data import Dataset, DataLoader, ConcatDataset
 from sklearn.metrics import *
 import torchvision as tv
-from efficientnet_pytorch import EfficientNet
 
 ######################## DONOTCHANGE ###########################
 def bind_model(model):
@@ -27,15 +34,11 @@ def bind_model(model):
         print('model loaded!')
 
     def infer(image_path):
+
         result = []
-        with torch.no_grad():   
-            test_transform = tv.transforms.Compose([
-                    tv.transforms.ToPILImage(mode = 'RGB'),
-                    tv.transforms.Resize(512),
-                    tv.transforms.CenterCrop(64)
-                    ])
+        with torch.no_grad():             
             batch_loader = DataLoader(dataset=PathDataset(image_path, labels=None),
-                                        batch_size=batch_size,shuffle=False, transform = test_transform)
+                                        batch_size=1,shuffle=False)
             # Train the model 
             for i, images in enumerate(batch_loader):
                 y_hat = model(images.to(device)).cpu().numpy()
@@ -91,8 +94,6 @@ class PathDataset(Dataset):
         
         if self.mode:
 
-            im = self.transform(im)
-            im = np.array(im)
             im = im.reshape(3,im.shape[0],im.shape[1])
             return torch.tensor(im,dtype=torch.float32)
         else:
@@ -141,13 +142,12 @@ if __name__ == '__main__':
     ######################################################################
 
     # hyperparameters
-    args.add_argument('--epoch', type=int, default=2000)
+    args.add_argument('--epoch', type=int, default=100)
     args.add_argument('--batch_size', type=int, default=64) 
     args.add_argument('--learning_rate', type=int, default=0.0001)
     args.add_argument('--train_ratio', type=int, default=0.8)
 
     config = args.parse_args()
-    
 
     # training parameters
     num_epochs = config.epoch
@@ -157,8 +157,7 @@ if __name__ == '__main__':
     device = torch.device('cuda:0' if torch.cuda.is_available() else 'cpu')
 
     # model setting ## 반드시 이 위치에서 로드해야함
-    #model = arch.CNN().to(device)
-    model=EfficientNet.from_pretrained('efficientnet-b3',num_classes=2).cuda()
+    model = arch.CNN().to(device)
 
     # Loss and optimizer
     criterion = nn.CrossEntropyLoss()
@@ -172,8 +171,10 @@ if __name__ == '__main__':
     #######################################
 
     if config.mode == 'train': ### training mode 일때는 여기만 접근
-        print(torch.version.__version__)
         print('Training Start...')
+        nsml.load(checkpoint='36',session='KHD009/Breast_Pathology/34')
+        nsml.save('saved')
+        exit()
 
         ############ DONOTCHANGE: Path loader ###############
         root_path = os.path.join(DATASET_PATH,'train')
@@ -186,7 +187,6 @@ if __name__ == '__main__':
         train_label = labels[:int(total_len*train_ratio)]
         valid_image = image_path[int(total_len*train_ratio):]
         valid_label = labels[int(total_len*train_ratio):]
-
         
         train_transform1 = tv.transforms.Compose([
                 tv.transforms.ToPILImage(mode = 'RGB'),
@@ -232,7 +232,7 @@ if __name__ == '__main__':
         
         
         valid_data = PathDataset(valid_image, valid_label, test_mode=False,transform = test_transform)
-        train_loader = DataLoader(dataset=ConcatDataset([train_data1,train_data2,train_data3,train_data4]), 
+        train_loader = DataLoader(dataset=ConcatDataset(train_data1,train_data2,train_data3,train_data4), 
                 batch_size=batch_size, shuffle=True, drop_last = True)
         valid_loader = DataLoader(dataset=valid_data, 
                 batch_size=batch_size, shuffle=True, drop_last = True)
@@ -297,13 +297,11 @@ if __name__ == '__main__':
             spec=tn_sum/(tn_sum+fp_sum)
             prec=tp_sum/(tp_sum+fp_sum)
             npv=tn_sum/(tn_sum+fn_sum)
-            f1= (2*prec*sens / (prec + sens))
+            f1= (2*prec*sens / (prec + sens)) * 100
             total_metric=(f1+accuracy+sens+spec+prec+npv)/6
             
             if best<total_metric:
                 best=total_metric
-                print('{0}/{1}'.format(best,total_metric))
-                print('acc : {} sens : {} spec :{} prec :{} npv :{}  f1 :{}'.format(accuracy,sens,spec,prec,npv,f1))
                 nsml.report(summary=True, step=epoch, epoch_total=num_epochs, loss=loss.item())#, acc=train_acc)
                 nsml.save('best')
 
