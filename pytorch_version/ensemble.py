@@ -35,8 +35,6 @@ def bind_model(model):
 
     def infer(image_path):
         result = []
-        result_b=[]
-        result_r=[]
         
         with torch.no_grad():   
             test_transform = tv.transforms.Compose([
@@ -294,7 +292,7 @@ if __name__ == '__main__':
         false_index=[]
         
         for i in range(len(labels)):
-            if labels[i]==1:
+            if labels[i]==0:
                 true_index.append(labels.index(labels[i],i))
             else:
                 false_index.append(labels.index(labels[i],i))
@@ -329,7 +327,7 @@ if __name__ == '__main__':
         #img1=image_path[total_index]
         #img2=image_path[true_valid_index]
         #img3=np.concatenate([img1,img2])
-        #labels=np.array(labels)
+        labels=np.array(labels)
         
         
         ###

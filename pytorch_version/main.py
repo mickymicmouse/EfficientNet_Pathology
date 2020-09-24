@@ -27,12 +27,18 @@ def bind_model(model):
         print('model loaded!')
 
     def infer(image_path):
-        result = []
+        
+        result1 = []
+        result2 = []
+        result3 = []
+        result4 = []
+        result5 = []        
+
         with torch.no_grad():   
             test_transform = tv.transforms.Compose([
                     tv.transforms.ToPILImage(mode = 'RGB'),
                     tv.transforms.Resize(512),
-                    tv.transforms.CenterCrop(256),
+                    tv.transforms.RandomCrop(256),
                     tv.transforms.ToTensor(),
                     tv.transforms.Normalize(mean=[0.485, 0.456, 0.406],
                                          std=[0.229, 0.224, 0.225])
@@ -43,8 +49,25 @@ def bind_model(model):
             # Train the model 
             for i, images in enumerate(batch_loader):
                 y_hat = model(images.to(device)).cpu().numpy()
-                result.extend(np.argmax(y_hat, axis=1))
-
+                result1.extend(np.argmax(y_hat, axis=1))
+            for i, images in enumerate(batch_loader):
+                y_hat = model(images.to(device)).cpu().numpy()
+                result2.extend(np.argmax(y_hat, axis=1))
+            for i, images in enumerate(batch_loader):
+                y_hat = model(images.to(device)).cpu().numpy()
+                result3.extend(np.argmax(y_hat, axis=1))
+            for i, images in enumerate(batch_loader):
+                y_hat = model(images.to(device)).cpu().numpy()
+                result4.extend(np.argmax(y_hat, axis=1))
+            for i, images in enumerate(batch_loader):
+                y_hat = model(images.to(device)).cpu().numpy()
+                result5.extend(np.argmax(y_hat, axis=1))
+                
+            total_result = np.array([result1,result2,result3,result4,result5])
+            before_result = list(np.count_nonzero(total_result, axis=0))
+            after_result = [1 if x>=3 else 0 for x in before_result]
+            result = after_result
+                
         print('predicted')
         return np.array(result)
 
@@ -197,7 +220,7 @@ if __name__ == '__main__':
         false_index=[]
         
         for i in range(len(labels)):
-            if labels[i]==1:
+            if labels[i]==0:
                 true_index.append(labels.index(labels[i],i))
             else:
                 false_index.append(labels.index(labels[i],i))
@@ -208,7 +231,10 @@ if __name__ == '__main__':
         
         
         true_train_index = list(set(true_index)-set(true_valid_index))
+        #5100
+        
         false_train_index = list(set(false_index)-set(false_valid_index))
+        #1900
         
         short_ratio = int(len(true_train_index)//len(false_train_index))
         short_add_num = int(len(true_train_index)%len(false_train_index))
@@ -222,7 +248,9 @@ if __name__ == '__main__':
         train_index = []
         train_index.extend(true_train_index)
         train_index.extend(false_train_idx)
+        #10200
         valid_index = list(set(true_valid_index) | set(false_valid_index))
+        #1000
         
         #valid data = 1000
         #train_data = 10200
@@ -294,6 +322,30 @@ if __name__ == '__main__':
         train_transform4 = tv.transforms.Compose([
                 tv.transforms.ToPILImage(mode = 'RGB'),
                 tv.transforms.Resize(512),
+                tv.transforms.RandomRotation(45),
+                tv.transforms.RandomCrop(256),
+                tv.transforms.ToTensor(),
+                tv.transforms.Normalize(mean=[0.485, 0.456, 0.406],
+                                     std=[0.229, 0.224, 0.225])
+                ])
+        #로테이션
+        train_transform5 = tv.transforms.Compose([
+                tv.transforms.ToPILImage(mode = 'RGB'),
+                tv.transforms.Resize(512),
+                tv.transforms.RandomCrop(256),
+                tv.transforms.ColorJitter(            
+                        brightness=0.4,
+                        contrast=0.4,
+                        saturation=0.4),
+                tv.transforms.ToTensor(),
+                tv.transforms.Normalize(mean=[0.485, 0.456, 0.406],
+                                     std=[0.229, 0.224, 0.225])
+                ])
+        #colorjit
+        
+        train_transform6 = tv.transforms.Compose([
+                tv.transforms.ToPILImage(mode = 'RGB'),
+                tv.transforms.Resize(512),
                 tv.transforms.RandomCrop(256),
                 tv.transforms.ToTensor(),
                 tv.transforms.Normalize(mean=[0.485, 0.456, 0.406],
@@ -314,12 +366,12 @@ if __name__ == '__main__':
         train_data2 = PathDataset(train_image, train_label, test_mode=False,transform = train_transform2)
         train_data3 = PathDataset(train_image, train_label, test_mode=False,transform = train_transform3)
         train_data4 = PathDataset(train_image, train_label, test_mode=False,transform = train_transform4)
-        
-        
-        
+        train_data5 = PathDataset(train_image, train_label, test_mode=False,transform = train_transform5)
+        train_data6 = PathDataset(train_image, train_label, test_mode=False,transform = train_transform6)
         
         valid_data = PathDataset(valid_image, valid_label, test_mode=False,transform = test_transform)
-        train_loader = DataLoader(dataset=ConcatDataset([train_data1,train_data2,train_data3,train_data4]), 
+        
+        train_loader = DataLoader(dataset=ConcatDataset([train_data1,train_data2,train_data3,train_data4,train_data5,train_data6]), 
                 batch_size=batch_size, shuffle=True, drop_last = True)
         valid_loader = DataLoader(dataset=valid_data, 
                 batch_size=batch_size, shuffle=True, drop_last = True)
@@ -332,12 +384,20 @@ if __name__ == '__main__':
         for epoch in range(num_epochs):
             pred_sum = 0#model output
             gt_sum = 0#label
-            tp_sum=0.00001
-            fp_sum=0.00001
-            fn_sum=0.00001
-            tn_sum=0.00001
+            tp_sum=1e-3
+            fp_sum=1e-3
+            fn_sum=1e-3
+            tn_sum=1e-3
             acc=0
             total=0
+            
+            answer=[]
+            result1 = []
+            result2 = []
+            result3 = []
+            result4 = []
+            result5 = []               
+
             for i, (images, labels) in enumerate(train_loader):
                 model.train()
                 
@@ -361,7 +421,10 @@ if __name__ == '__main__':
                 vlabels = vlabels.to(device)
                 
                 voutputs = model(vimages)
-                crossentropy = criterion(voutputs, vlabels)
+                
+                
+                
+
                 TP,FP,TN,FN,pred_len, gt_len=fmeasure(voutputs.cpu(),vlabels.cpu())
 
                 voutputs = voutputs.cpu().detach().numpy()
